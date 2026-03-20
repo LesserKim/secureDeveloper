@@ -22,7 +22,7 @@ type User struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Phone    string `json:"phone"`
-	Password string `json:"-"`
+	Password string `json:"-"` //: 비밀번호 해시와 같은 민감 정보가 응답(Output)으로 나가는 것을 프레임워크 레벨에서 원천 차단
 	Balance  int64  `json:"balance"`
 	IsAdmin  bool   `json:"is_admin"`
 }
@@ -124,6 +124,7 @@ func main() {
 
 	auth := router.Group("/api/auth")
 	{
+		//회원가입
 		auth.POST("/register", func(c *gin.Context) {
 			var request RegisterRequest
 			if err := c.ShouldBindJSON(&request); err != nil {
@@ -131,9 +132,16 @@ func main() {
 				return
 			}
 
+			//유저 생성
+			if err := store.createUser(request); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "회원가입 실패: " + err.Error()})
+				return
+			}
+
+			// 회원가입 완료
 			c.JSON(http.StatusAccepted, gin.H{
-				"message": "dummy register handler",
-				"todo":    "replace with actual signup validation and insert query",
+				"message": "회원가입 완료.",
+				//"todo":    "replace with actual signup validation and insert query",
 				"user": gin.H{
 					"username": request.Username,
 					"name":     request.Name,
@@ -143,6 +151,7 @@ func main() {
 			})
 		})
 
+		// 로그인
 		auth.POST("/login", func(c *gin.Context) {
 			var request LoginRequest
 			if err := c.ShouldBindJSON(&request); err != nil {
@@ -175,6 +184,7 @@ func main() {
 			})
 		})
 
+		//로그아웃
 		auth.POST("/logout", func(c *gin.Context) {
 			token := tokenFromRequest(c)
 			if token == "" {
@@ -194,6 +204,7 @@ func main() {
 			})
 		})
 
+		//회원 탈퇴
 		auth.POST("/withdraw", func(c *gin.Context) {
 			var request WithdrawAccountRequest
 			if err := c.ShouldBindJSON(&request); err != nil {
@@ -212,6 +223,7 @@ func main() {
 				return
 			}
 
+			//회원 탈퇴하려면? 데이터 지워줌 -> delete query, session 지워주기
 			c.JSON(http.StatusAccepted, gin.H{
 				"message": "dummy withdraw handler",
 				"todo":    "replace with password check and account delete logic",
@@ -460,7 +472,6 @@ func main() {
 		panic(err)
 	}
 }
-
 func openStore(databasePath, schemaFile, seedFile string) (*Store, error) {
 	db, err := sql.Open("sqlite", databasePath)
 	if err != nil {
@@ -502,6 +513,14 @@ func (s *Store) execSQLFile(path string) error {
 	return err
 }
 
+// 회원가입, 유저 생성
+func (s *Store) createUser(req RegisterRequest) error {
+	query := `INSERT INTO users (username, name, email, phone, password, balance, VALUES)`
+	_, err := s.db.Exec(query, req.Username, req.Name, req.Email, req.Phone, req.Password, 0, 0)
+	return err
+}
+
+// 사용자 검색
 func (s *Store) findUserByUsername(username string) (User, bool, error) {
 	row := s.db.QueryRow(`
 		SELECT id, username, name, email, phone, password, balance, is_admin
@@ -595,6 +614,7 @@ func tokenFromRequest(c *gin.Context) string {
 	return strings.TrimSpace(cookieValue)
 }
 
+// 토큰 문자열 생성하는 함수
 func newSessionToken() (string, error) {
 	buffer := make([]byte, 24)
 	if _, err := rand.Read(buffer); err != nil {
