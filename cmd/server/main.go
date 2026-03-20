@@ -265,6 +265,11 @@ func main() {
 				return
 			}
 
+			if request.Amount <= 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "invalid deposit request"})
+				return
+			}
+
 			token := tokenFromRequest(c)
 			if token == "" {
 				c.JSON(http.StatusUnauthorized, gin.H{"message": "missing authorization token"})
